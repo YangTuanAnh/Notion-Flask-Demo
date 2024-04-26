@@ -1,66 +1,52 @@
-from flask import Flask, request
+from flask import Flask, jsonify, redirect, url_for
+from flask_dance.consumer import OAuth2ConsumerBlueprint
+from werkzeug.middleware.proxy_fix import ProxyFix
+import os
 import requests
 
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app)
+app.secret_key = 'wombles'
 
-@app.route('/create', methods=['POST'])
-def create_item():
-    data = request.json
-    # Make a request to Notion API to create a new item in the database
-    response = requests.post(
-        f'https://api.notion.com/v1/pages',
-        headers={
-            'Authorization': f'Bearer {data["token"]}',
-            'Content-Type': 'application/json',
-            'Notion-Version': '2021-05-13',
-        },
-        json={
-            'parent': {'database_id': data["database_id"]},
-            'properties': {
-                'Name': {'title': [{'text': {'content': data['name']}}]},
-                'Description': {'rich_text': [{'text': {'content': data['description']}}]},
-            }
-        }
-    )
-    return response.json(), response.status_code
+client_id = os.environ.get('NOTION_OAUTH_CLIENT_ID')
+client_secret = os.environ.get('NOTION_OAUTH_CLIENT_SECRET')
 
-@app.route('/read')
-def read_items():
-    # Make a request to Notion API to retrieve all items from the database
-    response = requests.get(
-        f'https://api.notion.com/v1/databases/{request.args.get("database_id")}/query',
-        headers={'Authorization': f'Bearer {request.args.get("token")}', 'Notion-Version': '2021-05-13'}
-    )
-    return response.json(), response.status_code
+assert client_id, 'Must specify NOTION_OAUTH_CLIENT_ID environment variable'
+assert client_secret, 'Must specify NOTION_OAUTH_CLIENT_SECRET environment variable'
 
-@app.route('/update/<item_id>', methods=['PATCH'])
-def update_item(item_id):
-    data = request.json
-    # Make a request to Notion API to update the item
-    response = requests.patch(
-        f'https://api.notion.com/v1/pages/{item_id}',
-        headers={
-            'Authorization': f'Bearer {data["token"]}',
-            'Content-Type': 'application/json',
-            'Notion-Version': '2021-05-13',
-        },
-        json={
-            'properties': {
-                'Name': {'title': [{'text': {'content': data['name']}}]},
-                'Description': {'rich_text': [{'text': {'content': data['description']}}]},
-            }
-        }
-    )
-    return response.json(), response.status_code
+notion_blueprint = OAuth2ConsumerBlueprint(
+    "notion",
+    __name__,
+    client_id=client_id,
+    client_secret=client_secret,
+    base_url="https://api.notion.com",
+    token_url="https://api.notion.com/v1/oauth/token",
+    authorization_url="https://api.notion.com/v1/oauth/authorize",
+)
 
-@app.route('/delete/<item_id>', methods=['DELETE'])
-def delete_item(item_id):
-    # Make a request to Notion API to delete the item
-    response = requests.delete(
-        f'https://api.notion.com/v1/pages/{item_id}',
-        headers={'Authorization': f'Bearer {request.args.get("token")}', 'Notion-Version': '2021-05-13'}
-    )
-    return response.json(), response.status_code
+app.register_blueprint(notion_blueprint, url_prefix="/login")
+
+@app.route('/logout')
+def logout():
+    notion_blueprint.session.teardown_session()
+    return redirect('/')
+
+@app.route("/")
+def index():
+    if not notion_blueprint.session.authorized:
+        return redirect(url_for("notion.login"))
+
+    session = notion_blueprint.session
+    
+    # headers = {
+    #         'Authorization': f'Bearer {session.access_token}',
+    #         'Content-Type': 'application/json',
+    #         'Notion-Version': '2022-06-28',
+    # }
+    # # see https://developers.notion.com/reference/get-users
+    # users = requests.get('https://api.notion.com/v1/users', headers=headers)
+
+    return session.access_token
 
 if __name__ == '__main__':
     app.run(debug=True)
