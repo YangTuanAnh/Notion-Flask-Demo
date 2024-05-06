@@ -54,7 +54,7 @@ def index():
 
     return jsonify(users.json()), 200
 
-@app.route("/note", methods=['GET', 'POST', "PATCH"])
+@app.route("/note", methods=['GET', 'POST', "PATCH", "DELETE"])
 def get_resource():
     resource_id = request.args.get('id')
     resource_name = request.args.get('name')
@@ -68,6 +68,7 @@ def get_resource():
 
     # session = notion_blueprint.session
     
+    # access_token = ""
     headers = {
             'Authorization': f'Bearer {access_token}',
             'Content-Type': 'application/json',
