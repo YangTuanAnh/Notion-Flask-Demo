@@ -296,6 +296,7 @@ def send_prompt():
     embeddings = embeddings.tolist()
     
     resp = supabase.rpc('match_documents', {
+        "database_id": resource_id,
         "query_embedding": embeddings[0], 
         "match_threshold": 0.78,
         "match_count": 10,
